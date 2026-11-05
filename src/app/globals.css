@@ -1,0 +1,221 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Restrained, product-style palette: neutral greys carry the layout, one indigo
+ * accent marks what is interactive or selected, and status colours stay muted.
+ */
+:root {
+  --bg: #fbfbfc;
+  --surface: #ffffff;
+  --surface-2: #f5f5f7;
+  --surface-3: #ececef;
+  --border: #e6e6ea;
+  --border-strong: #d4d4da;
+  --text: #17181c;
+  --muted: #6b6f78;
+  --faint: #9a9ea6;
+  --accent: #5b5bd6;
+  --accent-soft: rgb(91 91 214 / 0.08);
+  --accent-fg: #ffffff;
+  --danger: #d93f3f;
+  --danger-soft: rgb(217 63 63 / 0.08);
+  --warning: #b7791f;
+  --warning-soft: rgb(183 121 31 / 0.1);
+  --success: #2f8f5b;
+  --success-soft: rgb(47 143 91 / 0.1);
+  --info: #3b7fd1;
+  --info-soft: rgb(59 127 209 / 0.08);
+  --chart-grid: #ededf0;
+  --shadow-card: 0 1px 2px rgb(16 17 20 / 0.04);
+  --shadow-pop: 0 8px 30px rgb(16 17 20 / 0.12), 0 0 0 1px rgb(16 17 20 / 0.06);
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0c0d0f;
+  --surface: #131416;
+  --surface-2: #18191c;
+  --surface-3: #1f2024;
+  --border: #232428;
+  --border-strong: #303237;
+  --text: #ecedef;
+  --muted: #8b8f98;
+  --faint: #5f636b;
+  --accent: #7c82ee;
+  --accent-soft: rgb(124 130 238 / 0.12);
+  --accent-fg: #ffffff;
+  --danger: #eb6a6a;
+  --danger-soft: rgb(235 106 106 / 0.1);
+  --warning: #e0b24a;
+  --warning-soft: rgb(224 178 74 / 0.1);
+  --success: #4cb782;
+  --success-soft: rgb(76 183 130 / 0.1);
+  --info: #6aa9f0;
+  --info-soft: rgb(106 169 240 / 0.1);
+  --chart-grid: #1d1e22;
+  --shadow-card: none;
+  --shadow-pop: 0 12px 40px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+  --animate-enter: enter 0.22s ease-out both;
+  --animate-pop: pop 0.14s ease-out both;
+  --animate-drawer: drawer 0.2s ease-out both;
+  --animate-rise: rise 0.24s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+/* A booking that just arrived from another tab: a brief accent tint, no glow. */
+@keyframes arrived {
+  0%,
+  60% {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+}
+
+.arrived {
+  animation: arrived 2.4s ease-out;
+}
+
+/* Breaks and time off on the calendar: quiet diagonal hatching. */
+.hatch {
+  background-image: repeating-linear-gradient(135deg, var(--border) 0 1px, transparent 1px 7px);
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes drawer {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-feature-settings: "cv11", "ss01", "ss03";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* In the base layer, so utilities like focus:outline-none can still turn it off. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+dialog[open] {
+  animation: var(--animate-pop);
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* SQL highlighting: keywords in the accent, strings and numbers in muted status colours. */
+.sql-kw {
+  color: var(--accent);
+  font-weight: 500;
+}
+.sql-str {
+  color: var(--success);
+}
+.sql-num {
+  color: var(--info);
+}
+.sql-com {
+  color: var(--faint);
+  font-style: italic;
+}
+.sql-fn {
+  color: var(--warning);
+}
+
+/* Editor: the textarea sits over the highlighted copy and must wrap the same way. */
+.editor-layer {
+  font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 20px;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px 14px;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200px 0;
+  }
+  to {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 0, var(--surface-3) 50%, var(--surface-2) 100%);
+  background-size: 200px 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}

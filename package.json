@@ -1,0 +1,41 @@
+{
+  "name": "sql-copilot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Quarry: ask a database questions in plain English or Turkish and get SQL you can read, run, chart and export. A rule-based text-to-SQL engine and SQLite, both running in the browser.",
+  "license": "MIT",
+  "scripts": {
+    "predev": "node scripts/copy-wasm.mjs",
+    "prebuild": "node scripts/copy-wasm.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "eval": "vitest run tests/unit/accuracy.test.ts",
+    "serve": "node scripts/serve.mjs"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "lucide-react": "1.63.0",
+    "next": "16.4.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "recharts": "3.10.1",
+    "sql.js": "1.15.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "20.19.43",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/sql.js": "1.4.11",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.3",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}

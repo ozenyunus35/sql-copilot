@@ -1,0 +1,7 @@
+holdout1 first run (2026-11-05, before any tuning on it): 49/64 (77%)
+random generator first run (before tuning on it): seed101 83% right / 17.0% wrong; seed202 77% / 23.0%; seed303 80% / 20.3% (300 each, 0 unanswered)
+after round 1 (engine rules + generator fixes: no filter-on-grouped-dimension, no 'paid by card'): seed101 95%/5.3% wrong; seed202 93%/7.3%; seed303 94%/6.3%
+after round 2: seed101 99.7%/0.3% wrong; seed202 98.3%/1.7%; seed303 99.0%/1.0% (generator vocabulary overlaps the dictionary: optimistic)
+holdout2 FIRST RUN (written after tuning, never run before): 46/56 (82%), 9 wrong, 1 no answer  <- number for the README
+fresh random seeds first run: 404 97.7% (2.3% wrong), 505 98.7% (1.3%), 606 98.7% (1.3%)
+after round 3 (holdout2 retired into tuning): holdout2 56/56, validation seeds 202 98.3% / 303 99.0%
