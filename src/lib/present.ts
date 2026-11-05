@@ -110,26 +110,3 @@ export function answerSentence(r: QueryResult, formats: ColumnFormat[], plan: Pl
   const what = plan?.kind !== "aggregate" && t ? (tr ? `${t.labelTr} kaydı` : r.rows.length === 1 ? t.label : t.plural) : tr ? "satır" : r.rows.length === 1 ? "row" : "rows";
   return `${r.truncated ? (tr ? "İlk " : "First ") : ""}${r.rows.length.toLocaleString(locale)} ${what}.`;
 }
-
-export interface ChartSpec {
-  type: "line" | "bar";
-  x: number;
-  ys: number[];
-  horizontal: boolean;
-}
-
-/** A chart when the result has a label column and numbers: time series as lines, categories as bars. */
-export function chooseChart(r: QueryResult, formats: ColumnFormat[]): ChartSpec | null {
-  if (r.rows.length < 2 || r.rows.length > 400) return null;
-  const x = formats.findIndex((f) => f === "period" || f === "date" || f === "text");
-  if (x < 0) return null;
-  const ys = formats.map((f, j) => (j !== x && ["money", "number", "integer", "days", "percent"].includes(f) && !["share_pct", "change_pct"].includes(r.columns[j]) ? j : -1)).filter((j) => j >= 0);
-  if (!ys.length) return null;
-  // Same unit only: don't plot money next to counts.
-  const sameUnit = ys.filter((j) => formats[j] === formats[ys[0]]).slice(0, 3);
-  const time = formats[x] === "period" || formats[x] === "date";
-  if (time) return { type: r.rows.length <= 4 ? "bar" : "line", x, ys: sameUnit, horizontal: false };
-  if (r.rows.length > 60) return null;
-  const longest = Math.max(...r.rows.map((row) => String(row[x] ?? "").length));
-  return { type: "bar", x, ys: sameUnit, horizontal: longest > 8 || r.rows.length > 8 };
-}

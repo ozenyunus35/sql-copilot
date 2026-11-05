@@ -17,7 +17,8 @@ import { ThemeToggle } from "./theme-toggle";
 import { useToast } from "./toast";
 import { Button, Modal, cx } from "./ui";
 import { UploadDialog } from "./upload";
-import type { ChartKind } from "./viz";
+import type { ChartKind } from "./chart-shape";
+import { preloadViz } from "./viz-lazy";
 
 const REPO = "https://github.com/ozenyunus35/sql-copilot";
 type View = "ask" | "sql" | "dashboard" | "data";
@@ -146,6 +147,7 @@ function Workspace({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }
     loadDemo()
       .then((d) => {
         openDataset(d, l);
+        preloadViz();
         const hash = new URLSearchParams(location.hash.slice(1));
         const hq = hash.get("q");
         const hs = hash.get("sql");
@@ -161,6 +163,13 @@ function Workspace({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }
       .catch((e: Error) => setBootError(e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The open view lives in the address, so a reload or a copied link lands on the same page.
+  useEffect(() => {
+    if (!ds) return;
+    const h = view === "ask" ? "" : `#view=${view}`;
+    if (location.hash !== h) window.history.replaceState(null, "", location.pathname + location.search + h);
+  }, [view, ds]);
 
   // ⌘K / Ctrl+K opens the palette.
   useEffect(() => {

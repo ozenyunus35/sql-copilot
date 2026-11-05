@@ -11,7 +11,7 @@ import type { Answer, Pin } from "@/lib/workspace";
 import { AnswerCard } from "./answer-card";
 import { Kpi } from "./dashboard";
 import { cx } from "./ui";
-import type { ChartKind } from "./viz";
+import type { ChartKind } from "./chart-shape";
 
 const TOPICS = {
   en: [

@@ -24,6 +24,13 @@ describe("SQL explanations and checks", async () => {
     expect(e.steps[1].detail.tr).toContain("fatura durumu: 'void' değil");
     expect(e.lints).toEqual([]);
   });
+  it("describes window functions and named steps", () => {
+    const [e] = explain("WITH monthly AS (SELECT strftime('%Y-%m', issued_at) AS month, SUM(total) AS revenue FROM invoices GROUP BY month) SELECT month, revenue, SUM(revenue) OVER (ORDER BY month) AS running, LAG(revenue) OVER (ORDER BY month) AS prev, RANK() OVER (ORDER BY revenue DESC) AS rnk FROM monthly", model);
+    expect(e.summary.en).toBe("Lists 5 columns from monthly (WITH), with a running total (running) and the previous row's value (prev) and a rank (rnk).");
+    expect(e.steps.map((s) => s.title.en)).toContain("Window functions");
+    expect(e.summary.tr).toContain("kümülatif toplam (running)");
+    expect(explain("SELECT month, ROUND(SUM(revenue) OVER (ORDER BY month), 2) AS total FROM monthly", model)[0].summary.en).toContain("a running total (total)");
+  });
 
   it("flags the classic mistakes", () => {
     expect(lints("SELECT * FROM customers WHERE country = NULL")).toContain('error: "= NULL" is never true. Use IS NULL.');
@@ -31,6 +38,9 @@ describe("SQL explanations and checks", async () => {
     expect(lints("UPDATE customers SET status = 'inactive'")[0]).toMatch(/^error: This UPDATE has no WHERE/);
     expect(lints("SELECT c.name FROM customers c WHERE SUM(c.credit_limit) > 5 GROUP BY c.name")[0]).toMatch(/WHERE runs before grouping/);
     expect(lints("SELECT country, city, COUNT(*) FROM customers GROUP BY country")[0]).toMatch(/city is neither grouped nor aggregated/);
+    // Grouping by a primary key fixes the other columns of that table, but not of the joined one.
+    expect(lints("SELECT c.name, c.country, SUM(i.total) FROM customers c JOIN invoices i ON i.customer_id = c.id GROUP BY c.id")).toEqual([]);
+    expect(lints("SELECT c.name, i.status, SUM(i.total) FROM customers c JOIN invoices i ON i.customer_id = c.id GROUP BY c.id")[0]).toMatch(/i\.status is neither grouped/);
     expect(lints("SELECT c.name, SUM(i.total) FROM customers c JOIN invoices i ON i.customer_id = c.id JOIN invoice_lines il ON il.invoice_id = i.id GROUP BY c.name").join()).toMatch(/total is inflated/);
     expect(lints("SELECT * FROM invoices WHERE status = 'paid' OR status = 'open' AND total > 5").join()).toMatch(/AND and OR are mixed/);
     expect(lints("SELECT * FROM invoices WHERE issued_at > '1/3/2025'").join()).toMatch(/not in YYYY-MM-DD form/);

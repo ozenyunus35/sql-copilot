@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Bookmark, BookmarkCheck, Download, FileSpreadsheet, Lightbulb, ListTree, Pin, Play, Plus, Sparkles, Table2, X } from "lucide-react";
+import { ArrowRight, BarChart3, Bookmark, BookmarkCheck, Download, FileSpreadsheet, Lightbulb, ListTree, Pin, Play, Plus, Sparkles, Table2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Dataset } from "@/lib/engine";
 import { useLang, useT } from "@/lib/i18n";
@@ -8,13 +8,15 @@ import type { Model } from "@/lib/model";
 import { columnFormats, answerSentence } from "@/lib/present";
 import { explain } from "@/lib/sql/explain";
 import { formatSql } from "@/lib/sql/format";
+import { snippets } from "@/lib/sql/snippets";
 import { tokenizeSql } from "@/lib/sql/tokens";
 import { answerSql, uid, type Answer } from "@/lib/workspace";
 import { SqlEditor } from "./editor";
 import { ExplainPanel, ResultTable, download, toCsv, toXlsx } from "./results";
 import { SchemaTree, QueryList, type HistoryItem } from "./sidebar";
 import { Button, Modal, cx } from "./ui";
-import { Viz, chartShape, type ChartKind } from "./viz";
+import { chartShape, type ChartKind } from "./chart-shape";
+import { Viz } from "./viz-lazy";
 
 export interface SqlTab {
   id: string;
@@ -48,9 +50,9 @@ export function SqlView({ ds, model, tabs, setTabs, active, setActive, saved, on
   const isSaved = saved.some((s) => s.sql === tab.sql);
 
   const update = (sql: string) => setTabs(tabs.map((x) => (x.id === tab.id ? { ...x, sql } : x)));
-  const execute = (sql: string) => {
+  const execute = (sql: string, id = tab.id) => {
     const ans = answerSql(ds, sql);
-    setResult((r) => ({ ...r, [tab.id]: ans }));
+    setResult((r) => ({ ...r, [id]: ans }));
     if (ans.error) setView("explain");
     else if (view === "plan" || view === "explain") setView("table");
     onRun(sql);
@@ -65,6 +67,7 @@ export function SqlView({ ds, model, tabs, setTabs, active, setActive, saved, on
     const id = `t${uid()}`;
     setTabs([...tabs, { id, name: name ?? `${lang === "tr" ? "Sorgu" : "Query"} ${tabs.length + 1}`, sql }]);
     setActive(id);
+    return id;
   };
 
   return (
@@ -128,6 +131,30 @@ export function SqlView({ ds, model, tabs, setTabs, active, setActive, saved, on
             <span className="ml-auto hidden text-xs text-faint sm:inline">{lang === "tr" ? "Yazarken tablo ve sütun önerilir; Tab ya da Enter ile seçin." : "Tables and columns are suggested as you type; Tab or Enter picks one."}</span>
           </div>
         </div>
+        {/* Worked examples until something has run */}
+        {!a && (
+          <section aria-labelledby="examples-title" className="pt-2">
+            <h2 id="examples-title" className="text-xs font-medium tracking-wide text-faint uppercase">
+              {lang === "tr" ? "Örnek sorgular" : "Example queries"}
+            </h2>
+            <ul className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {snippets(model, ds.kind === "demo").map((x) => (
+                <li key={x.sql}>
+                  <button onClick={() => {
+                      const sql = formatSql(x.sql);
+                      execute(sql, addTab(sql, x.title[lang]));
+                    }} className="group flex h-full w-full flex-col rounded-lg border border-border bg-surface p-3 text-left shadow-card transition-colors hover:border-border-strong">
+                    <span className="flex items-center justify-between gap-2 text-[13px] font-medium">
+                      {x.title[lang]}
+                      <ArrowRight className="size-3.5 shrink-0 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-accent" />
+                    </span>
+                    <span className="mt-0.5 text-xs text-muted">{x.note[lang]}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {/* Result */}
         {a && (
           <section className="animate-rise overflow-hidden rounded-xl border border-border bg-surface shadow-card" aria-live="polite">

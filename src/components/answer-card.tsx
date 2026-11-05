@@ -13,7 +13,8 @@ import { SqlEditor } from "./editor";
 import { ExplainPanel, ResultTable, download, toCsv, toXlsx } from "./results";
 import { useToast } from "./toast";
 import { cx } from "./ui";
-import { Viz, chartPng, chartShape, type ChartKind } from "./viz";
+import { chartPng, chartShape, type ChartKind } from "./chart-shape";
+import { Viz } from "./viz-lazy";
 
 type View = "chart" | "table" | "sql" | "explain";
 

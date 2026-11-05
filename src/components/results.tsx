@@ -1,49 +1,12 @@
 "use client";
 
-import { AlertTriangle, ArrowDown, ArrowUp, BarChart3, Download, FileSpreadsheet, Info, Lightbulb, OctagonAlert, Table2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Info, OctagonAlert } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { Cell, QueryResult } from "@/lib/db";
 import { useLang, useT } from "@/lib/i18n";
-import type { Model } from "@/lib/model";
-import type { Plan } from "@/lib/nl/plan";
-import { chooseChart, columnFormats, formatCell, type ColumnFormat } from "@/lib/present";
+import { formatCell, type ColumnFormat } from "@/lib/present";
 import type { Explanation } from "@/lib/sql/explain";
 import { cx } from "./ui";
-
-export type ResultTab = "chart" | "table" | "explain";
-
-const SERIES = ["var(--accent)", "var(--info)", "var(--success)"];
-
-export function ResultTabs({ tab, setTab, hasChart, issues }: { tab: ResultTab; setTab: (t: ResultTab) => void; hasChart: boolean; issues: number }) {
-  const t = useT();
-  const tabs: Array<{ id: ResultTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: number }> = [
-    ...(hasChart ? [{ id: "chart" as const, label: t("chart"), icon: BarChart3 }] : []),
-    { id: "table", label: t("table"), icon: Table2 },
-    { id: "explain", label: t("explanation"), icon: Lightbulb, badge: issues },
-  ];
-  return (
-    <div role="tablist" aria-label={t("table")} className="flex gap-0.5 rounded-md border border-border p-0.5">
-      {tabs.map((x) => (
-        <button
-          key={x.id}
-          role="tab"
-          aria-selected={tab === x.id}
-          onClick={() => setTab(x.id)}
-          className={cx("flex h-7 items-center gap-1.5 rounded px-2.5 text-xs font-medium transition-colors", tab === x.id ? "bg-surface-3 text-text" : "text-muted hover:text-text")}
-        >
-          <x.icon className="size-3.5" />
-          {x.label}
-          {!!x.badge && <span className="grid size-4 place-items-center rounded-full bg-warning/15 text-[10px] text-warning tabular-nums">{x.badge}</span>}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export function useFormats(r: QueryResult | null, model: Model | null, plan: Plan | null) {
-  return useMemo(() => (r ? columnFormats(r, model, plan) : []), [r, model, plan]);
-}
 
 /** The result grid: sticky header, click a header to sort, numbers right-aligned. */
 export function ResultTable({ r, formats }: { r: QueryResult; formats: ColumnFormat[] }) {
@@ -99,69 +62,6 @@ export function ResultTable({ r, formats }: { r: QueryResult; formats: ColumnFor
         </div>
       )}
       {r.truncated && <p className="border-t border-border px-3 py-2 text-xs text-muted">{t("truncated", { n: r.rows.length.toLocaleString(locale) })}</p>}
-    </div>
-  );
-}
-
-function axisFormat(v: number, f: ColumnFormat) {
-  const abs = Math.abs(v);
-  const n = abs >= 1e6 ? `${(v / 1e6).toFixed(abs >= 1e7 ? 0 : 1)}M` : abs >= 1e3 ? `${(v / 1e3).toFixed(abs >= 1e4 ? 0 : 1)}k` : `${Math.round(v * 10) / 10}`;
-  return f === "money" ? `$${n}` : f === "percent" ? `${n}%` : n;
-}
-
-export function ResultChart({ r, formats }: { r: QueryResult; formats: ColumnFormat[] }) {
-  const t = useT();
-  const { lang } = useLang();
-  const locale = lang === "tr" ? "tr-TR" : "en-US";
-  const spec = chooseChart(r, formats);
-  if (!spec) return <p className="px-4 py-12 text-center text-muted">{t("noChart")}</p>;
-  const data = r.rows.map((row) => ({ x: String(row[spec.x] ?? "—"), ...Object.fromEntries(spec.ys.map((j) => [r.columns[j], row[j] ?? 0])) }));
-  const f = formats[spec.ys[0]];
-  const tooltip = (
-    <Tooltip
-      cursor={spec.type === "bar" ? { fill: "var(--surface-2)" } : { stroke: "var(--border-strong)" }}
-      contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, boxShadow: "var(--shadow-pop)" }}
-      labelStyle={{ color: "var(--text)", fontWeight: 500 }}
-      itemStyle={{ color: "var(--muted)" }}
-      formatter={(v) => formatCell(Number(v), f, locale)}
-    />
-  );
-  const height = spec.horizontal ? Math.min(560, Math.max(220, data.length * 28 + 40)) : 300;
-  return (
-    <div className="px-2 pt-4 pb-2" style={{ height }} role="img" aria-label={`${spec.type === "line" ? "Line" : "Bar"} chart of ${spec.ys.map((j) => r.columns[j]).join(", ")} by ${r.columns[spec.x]}`}>
-      <ResponsiveContainer width="100%" height="100%">
-        {spec.type === "line" ? (
-          <LineChart data={data} margin={{ top: 6, right: 16, bottom: 0, left: 4 }}>
-            <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-            <XAxis dataKey="x" tickLine={false} axisLine={false} minTickGap={24} tick={{ fill: "var(--faint)", fontSize: 11 }} />
-            <YAxis tickLine={false} axisLine={false} width={56} tick={{ fill: "var(--faint)", fontSize: 11 }} tickFormatter={(v: number) => axisFormat(v, f)} />
-            {tooltip}
-            {spec.ys.map((j, k) => (
-              <Line key={j} type="monotone" dataKey={r.columns[j]} stroke={SERIES[k]} strokeWidth={1.75} dot={data.length <= 24 ? { r: 2.5, strokeWidth: 0, fill: SERIES[k] } : false} activeDot={{ r: 4 }} animationDuration={700} />
-            ))}
-          </LineChart>
-        ) : spec.horizontal ? (
-          <BarChart data={data} layout="vertical" margin={{ top: 4, right: 20, bottom: 0, left: 4 }} barCategoryGap="24%">
-            <CartesianGrid horizontal={false} stroke="var(--chart-grid)" />
-            <XAxis type="number" tickLine={false} axisLine={false} tick={{ fill: "var(--faint)", fontSize: 11 }} tickFormatter={(v: number) => axisFormat(v, f)} />
-            <YAxis type="category" dataKey="x" tickLine={false} axisLine={false} width={Math.min(180, Math.max(70, Math.max(...data.map((d) => d.x.length)) * 6.4))} tick={{ fill: "var(--muted)", fontSize: 11.5 }} interval={0} />
-            {tooltip}
-            {spec.ys.map((j, k) => (
-              <Bar key={j} dataKey={r.columns[j]} fill={SERIES[k]} radius={[0, 3, 3, 0]} animationDuration={600} />
-            ))}
-          </BarChart>
-        ) : (
-          <BarChart data={data} margin={{ top: 6, right: 16, bottom: 0, left: 4 }} barCategoryGap="26%">
-            <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-            <XAxis dataKey="x" tickLine={false} axisLine={false} tick={{ fill: "var(--faint)", fontSize: 11 }} interval="preserveStartEnd" />
-            <YAxis tickLine={false} axisLine={false} width={56} tick={{ fill: "var(--faint)", fontSize: 11 }} tickFormatter={(v: number) => axisFormat(v, f)} />
-            {tooltip}
-            {spec.ys.map((j, k) => (
-              <Bar key={j} dataKey={r.columns[j]} fill={SERIES[k]} radius={[3, 3, 0, 0]} animationDuration={600} />
-            ))}
-          </BarChart>
-        )}
-      </ResponsiveContainer>
     </div>
   );
 }
@@ -256,5 +156,3 @@ export async function toXlsx(r: QueryResult, formats: ColumnFormat[], sql: strin
   q.getColumn(1).width = 100;
   return wb.xlsx.writeBuffer();
 }
-
-export const ExportIcons = { Download, FileSpreadsheet };

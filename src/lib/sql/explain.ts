@@ -453,8 +453,18 @@ function explainOne(sql: string, model: Model | null): Explanation {
     // Non-aggregated columns not in GROUP BY
     const groupTexts = new Set(q.groupBy.map((g) => text(g).toLowerCase()));
     const groupCols = new Set(q.groupBy.map((g) => g[g.length - 1]?.v));
+    // Grouping by a table's primary key fixes every other column of that table (as in PostgreSQL).
+    const keyed = new Set<string>();
+    for (const g of q.groupBy) {
+      const alias = g.length === 3 && g[1].text === "." ? g[0].v.toLowerCase() : g.length === 1 && q.sources.length === 1 ? q.sources[0].alias.toLowerCase() : null;
+      const col = g[g.length - 1]?.v.toLowerCase();
+      const src = alias ? q.sources.find((x) => x.alias.toLowerCase() === alias && !x.sub) : null;
+      const tm = src && model?.tables.find((t) => t.name.toLowerCase() === src.table!.toLowerCase());
+      if (src && (tm ? tm.columns.some((c) => c.name.toLowerCase() === col && c.role === "id") : col === "id")) keyed.add(alias!);
+    }
+    const fixed = (expr: Tok[]) => expr.every((t, i) => t.kind !== "ident" || expr[i + 1]?.text === "(" || (expr[i + 1]?.text === "." && keyed.has(t.v.toLowerCase())) || (expr[i - 1]?.text === "." && keyed.has(expr[i - 2]?.v.toLowerCase())) || (q.sources.length === 1 && keyed.size > 0));
     for (const it of q.items) {
-      if (hasAgg(it.expr) || it.expr.some((t) => t.v === "OVER")) continue;
+      if (hasAgg(it.expr) || it.expr.some((t) => t.v === "OVER") || (keyed.size && fixed(it.expr))) continue;
       const tx = text(it.expr).toLowerCase();
       if (groupTexts.has(tx) || (it.alias && groupTexts.has(it.alias)) || it.expr.every((t) => t.kind !== "ident" || groupCols.has(t.v) || t.kind === "ident" && it.expr[it.expr.indexOf(t) + 1]?.text === ".")) continue;
       const col = it.expr.filter((t) => t.kind === "ident" && it.expr[it.expr.indexOf(t) + 1]?.text !== "(" && it.expr[it.expr.indexOf(t) + 1]?.text !== ".").map((t) => t.v);
@@ -479,17 +489,43 @@ function explainOne(sql: string, model: Model | null): Explanation {
   if (q.limit.length && !q.orderBy.length) lint("info", "LIMIT without ORDER BY returns whichever rows come first, which can change between runs.", "ORDER BY olmadan LIMIT, ilk gelen satırları döndürür; sonuç çalıştırmadan çalıştırmaya değişebilir.");
   if (q.compound.length) steps.push({ title: bi("Combine", "Birleştir"), detail: bi(`Then combines this with ${q.compound.length} more quer${q.compound.length > 1 ? "ies" : "y"} (${q.compound.join(", ")}).`, `Sonra bunu ${q.compound.length} sorguyla daha birleştirir (${q.compound.join(", ")}).`) });
 
+  // Window functions
+  const windows: Bi[] = [];
+  for (const it of q.items) {
+    const over = it.expr.findIndex((t) => t.v === "OVER");
+    if (over < 0) continue;
+    // The function the OVER belongs to: the call that closes right before it, even inside ROUND(…).
+    const close = it.expr[over - 1];
+    let open = over - 2;
+    while (open >= 0 && !(it.expr[open].text === "(" && it.expr[open].depth === close?.depth)) open--;
+    const fn = (close?.text === ")" && open > 0 ? it.expr[open - 1].v : "").toUpperCase();
+    const ordered = it.expr.slice(over).some((t) => t.v === "ORDER");
+    const name = it.alias ? ` (${it.alias})` : "";
+    const w =
+      fn === "RANK" || fn === "DENSE_RANK" || fn === "ROW_NUMBER" ? bi(`a rank${name}`, `sıra numarası${name}`)
+      : fn === "LAG" ? bi(`the previous row's value${name}`, `önceki satırın değeri${name}`)
+      : fn === "LEAD" ? bi(`the next row's value${name}`, `sonraki satırın değeri${name}`)
+      : fn === "SUM" ? (ordered ? bi(`a running total${name}`, `kümülatif toplam${name}`) : bi(`a total over each partition${name}`, `bölüm toplamı${name}`))
+      : fn === "AVG" && ordered ? bi(`a moving average${name}`, `hareketli ortalama${name}`)
+      : fn === "NTILE" ? bi(`a bucket number${name}`, `dilim numarası${name}`)
+      : bi(`a window calculation${name}`, `pencere hesabı${name}`);
+    if (!windows.some((x) => x.en === w.en)) windows.push(w);
+  }
+  if (windows.length)
+    steps.push({ title: bi("Window functions", "Pencere fonksiyonları"), detail: bi(`Computes ${windows.map((w) => w.en).join(", ")} across rows, without collapsing them.`, `Satırları birleştirmeden ${windows.map((w) => w.tr).join(", ")} hesaplar.`) });
+
   nullCompare(ts, lint);
   fanOut(q, model, lint);
   integerDivision(ts, model, q, lint);
 
   // Summary
-  const tables = q.sources.filter((s) => !s.sub).map((s) => s.table!);
+  const ctes = new Set(q.ctes.map((c) => c.toLowerCase()));
+  const tables = q.sources.filter((s) => !s.sub).map((s) => (ctes.has(s.table!.toLowerCase()) ? `${s.table} (WITH)` : s.table!));
   const groups = q.groupBy.length ? both((L, lang) => q.groupBy.map((g) => describeExpr(g, L, lang)).join(lang === "tr" ? " ve " : " and ")) : null;
   const measures = aggItems.length ? both((L, lang) => aggItems.map((it) => it.alias ?? describeExpr(it.expr, L, lang)).join(", ")) : null;
   const summary = bi(
-    `${measures ? `Computes ${measures.en}` : `Lists ${q.items.length === 1 && q.items[0].expr[0]?.text === "*" ? "rows" : outputs.length + " column" + (outputs.length > 1 ? "s" : "")}`}${groups ? ` for each ${groups.en}` : ""} from ${tables.length ? tables.join(" + ") : "a subquery"}${q.where.length ? ", after filtering" : ""}${q.limit.length ? `, top ${text(q.limit)}` : ""}.`,
-    `${tables.length ? tables.join(" + ") : "Alt sorgu"} verisinden${q.where.length ? " süzdükten sonra" : ""} ${groups ? `${groups.tr} bazında ` : ""}${measures ? `${measures.tr} hesaplar` : "satırları listeler"}${q.limit.length ? ` (ilk ${text(q.limit)})` : ""}.`,
+    `${measures ? `Computes ${measures.en}` : `Lists ${q.items.length === 1 && q.items[0].expr[0]?.text === "*" ? "rows" : outputs.length + " column" + (outputs.length > 1 ? "s" : "")}`}${groups ? ` for each ${groups.en}` : ""} from ${tables.length ? tables.join(" + ") : "a subquery"}${q.where.length ? ", after filtering" : ""}${q.limit.length ? `, top ${text(q.limit)}` : ""}${windows.length ? `, with ${windows.map((w) => w.en).join(" and ")}` : ""}.`,
+    `${tables.length ? tables.join(" + ") : "Alt sorgu"} verisinden${q.where.length ? " süzdükten sonra" : ""} ${groups ? `${groups.tr} bazında ` : ""}${measures ? `${measures.tr} hesaplar` : "satırları listeler"}${q.limit.length ? ` (ilk ${text(q.limit)})` : ""}${windows.length ? `; ${windows.map((w) => w.tr).join(" ve ")} ekler` : ""}.`,
   );
   return { kind: "select", summary, steps, lints };
 }

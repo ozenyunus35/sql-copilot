@@ -1,65 +1,39 @@
 "use client";
 
 import { useMemo, useRef } from "react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { QueryResult } from "@/lib/db";
 import { useLang, useT } from "@/lib/i18n";
 import { formatCell, type ColumnFormat } from "@/lib/present";
+import { autoKind, axisFormat, chartShape, type ChartKind } from "./chart-shape";
 
-export type ChartKind = "auto" | "bar" | "hbar" | "line" | "area" | "pie";
+
 
 const PALETTE = ["var(--accent)", "var(--info)", "var(--success)", "var(--warning)", "#a970d6", "#5aa5a5", "#d4708f", "#8a8f99"];
 
-export interface Shape {
-  x: number;
-  /** One series per numeric column, or per value of a second label column (pivot). */
-  series: Array<{ key: string; label: string }>;
-  data: Array<Record<string, string | number>>;
-  time: boolean;
-  format: ColumnFormat;
-  pivot: boolean;
-}
-
-/** Works out what can be charted: a label column and numbers, or two labels and one number (pivot). */
-export function chartShape(r: QueryResult, formats: ColumnFormat[]): Shape | null {
-  if (r.rows.length < 1 || r.rows.length > 1000) return null;
-  const labels = formats.map((f, j) => (["text", "period", "date"].includes(f) ? j : -1)).filter((j) => j >= 0);
-  const nums = formats.map((f, j) => (["money", "number", "integer", "days", "percent"].includes(f) && !["share_pct", "change_pct"].includes(r.columns[j]) ? j : -1)).filter((j) => j >= 0);
-  if (!labels.length || !nums.length) return null;
-  // Time first on the x axis when there is one.
-  const x = labels.find((j) => formats[j] === "period" || formats[j] === "date") ?? labels[0];
-  const time = formats[x] === "period" || formats[x] === "date";
-  const other = labels.find((j) => j !== x);
-  if (other !== undefined && nums.length === 1) {
-    const y = nums[0];
-    const keys = [...new Set(r.rows.map((row) => String(row[other] ?? "—")))];
-    if (keys.length <= 12) {
-      const byX = new Map<string, Record<string, string | number>>();
-      for (const row of r.rows) {
-        const xv = String(row[x] ?? "—");
-        const rec = byX.get(xv) ?? { x: xv };
-        rec[String(row[other] ?? "—")] = Number(row[y]) || 0;
-        byX.set(xv, rec);
-      }
-      return { x, series: keys.map((k) => ({ key: k, label: k })), data: [...byX.values()], time, format: formats[y], pivot: true };
-    }
-  }
-  const same = nums.filter((j) => formats[j] === formats[nums[0]]).slice(0, 4);
-  const data = r.rows.map((row) => ({ x: String(row[x] ?? "—"), ...Object.fromEntries(same.map((j) => [r.columns[j], Number(row[j]) || 0])) }));
-  return { x, series: same.map((j) => ({ key: r.columns[j], label: r.columns[j] })), data, time, format: formats[same[0]], pivot: false };
-}
-
-/** The chart drawn when the user hasn't picked one. */
-export function autoKind(s: Shape): Exclude<ChartKind, "auto"> {
-  if (s.time) return s.data.length <= 4 ? "bar" : s.pivot ? "line" : "area";
-  const longest = Math.max(...s.data.map((d) => String(d.x).length));
-  return longest > 8 || s.data.length > 8 ? "hbar" : "bar";
-}
-
-export function axisFormat(v: number, f: ColumnFormat) {
-  const abs = Math.abs(v);
-  const n = abs >= 1e6 ? `${(v / 1e6).toFixed(abs >= 1e7 ? 0 : 1)}M` : abs >= 1e3 ? `${(v / 1e3).toFixed(abs >= 1e4 ? 0 : 1)}k` : `${Math.round(v * 10) / 10}`;
-  return f === "money" ? `$${n}` : f === "percent" ? `${n}%` : n;
+type TipItem = { name?: string | number; value?: unknown; color?: string; payload?: { fill?: string } };
+function Tip({ active, payload, label, f, locale }: { active?: boolean; payload?: TipItem[]; label?: string | number; f: ColumnFormat; locale: string }) {
+  if (!active || !payload?.length) return null;
+  const items = payload.filter((p, i) => p.value !== undefined && p.value !== null && payload.findIndex((q) => q.name === p.name && q.value !== undefined && q.value !== null) === i);
+  const total = items.length > 1 ? items.reduce((a, p) => a + (Number(p.value) || 0), 0) : null;
+  return (
+    <div className="min-w-36 rounded-lg border border-border bg-surface px-3 py-2 text-xs shadow-pop">
+      {label !== undefined && <div className="mb-1 font-medium text-text">{label}</div>}
+      {items.map((p, i) => (
+        <div key={i} className="flex items-center gap-2 py-px">
+          <span className="size-2 shrink-0 rounded-full" style={{ background: p.color ?? p.payload?.fill }} />
+          <span className="min-w-0 flex-1 truncate text-muted">{p.name}</span>
+          <span className="font-medium text-text tabular-nums">{formatCell(Number(p.value), f, locale)}</span>
+        </div>
+      ))}
+      {total !== null && (
+        <div className="mt-1 flex justify-between gap-3 border-t border-border pt-1 text-muted">
+          <span>{locale === "tr-TR" ? "Toplam" : "Total"}</span>
+          <span className="font-medium text-text tabular-nums">{formatCell(total, f, locale)}</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function Viz({ r, formats, kind = "auto", height, compact = false, label, today }: { r: QueryResult; formats: ColumnFormat[]; kind?: ChartKind; height?: number; compact?: boolean; label?: string; today?: string }) {
@@ -73,9 +47,12 @@ export function Viz({ r, formats, kind = "auto", height, compact = false, label,
       const last = s.data[s.data.length - 1];
       const x = String(last.x);
       const q = `${today.slice(0, 4)}-Q${Math.floor((Number(today.slice(5, 7)) + 2) / 3)}`;
-      if ((today.startsWith(x) && x.length < 10) || x === q) s.data[s.data.length - 1] = { ...last, x: `${x} ${lang === "tr" ? "(devam)" : "(so far)"}` };
+      if ((today.startsWith(x) && x.length < 10) || x === q) {
+        s.data[s.data.length - 1] = { ...last, x: `${x} ${lang === "tr" ? "(devam)" : "(so far)"}` };
+        return { ...s, open: true };
+      }
     }
-    return s;
+    return s ? { ...s, open: false } : s;
   }, [r, formats, today, lang]);
   const box = useRef<HTMLDivElement>(null);
   if (!shape || shape.data.length < 1) return <p className="px-4 py-12 text-center text-muted">{t("noChart")}</p>;
@@ -87,34 +64,42 @@ export function Viz({ r, formats, kind = "auto", height, compact = false, label,
   const tooltip = (
     <Tooltip
       cursor={kk === "bar" || kk === "hbar" ? { fill: "var(--surface-2)" } : { stroke: "var(--border-strong)" }}
-      contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, boxShadow: "var(--shadow-pop)" }}
-      labelStyle={{ color: "var(--text)", fontWeight: 500 }}
-      itemStyle={{ color: "var(--muted)", padding: 0 }}
-      formatter={(v) => formatCell(Number(v), f, locale)}
+      content={(p) => <Tip active={p.active} payload={p.payload as unknown as TipItem[]} label={kk === "pie" ? undefined : (p.label as string)} f={f} locale={locale} />}
+      isAnimationActive={false}
     />
   );
   const legend = shape.series.length > 1 ? <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11.5, color: "var(--muted)", paddingTop: 6 }} /> : null;
   const h = height ?? (kk === "hbar" ? Math.min(560, Math.max(200, shape.data.length * (compact ? 22 : 28) + 48)) : kk === "pie" ? 300 : compact ? 220 : 320);
   const stacked = shape.pivot && (kk === "bar" || kk === "hbar" || kk === "area");
   const yWidth = Math.min(190, Math.max(70, Math.max(...shape.data.map((d) => String(d.x).length)) * 6.4));
-  const desc = `${{ bar: "Bar", hbar: "Bar", line: "Line", area: "Area", pie: "Pie" }[kk]} chart of ${shape.series.map((s) => s.label).join(", ")} by ${r.columns[shape.x]}`;
+  // A period still filling up is drawn dashed, so a half-finished month doesn't read as a collapse.
+  const dashed = shape.open && !shape.pivot && shape.series.length === 1 && (kk === "line" || kk === "area") && shape.data.length > 2;
+  const key0 = shape.series[0].key;
+  const lineData = dashed
+    ? shape.data.map((d, i, all) => ({ ...d, [key0]: i === all.length - 1 ? (null as unknown as number) : d[key0], [`${key0}__open`]: i >= all.length - 2 ? d[key0] : (null as unknown as number) }))
+    : shape.data;
+  const openLine = (i: number, area: boolean) =>
+    dashed && i === 0 ? (area ? <Area key="open" type="monotone" dataKey={`${key0}__open`} name={shape.series[0].label} stroke={PALETTE[0]} strokeWidth={1.75} strokeDasharray="4 4" fill="none" animationDuration={600} legendType="none" /> : <Line key="open" type="monotone" dataKey={`${key0}__open`} name={shape.series[0].label} stroke={PALETTE[0]} strokeWidth={1.75} strokeDasharray="4 4" dot={false} animationDuration={600} legendType="none" />) : null;
+  const labels = !compact && !stacked && shape.series.length === 1 && shape.data.length <= 15;
+  const desc = `${{ bar: "Bar", hbar: "Bar", line: "Line", area: "Area", pie: "Pie" }[kk]} chart of ${shape.series.map((s) => (shape.pivot ? s.label : s.key.replace(/_/g, " "))).join(", ")} by ${r.columns[shape.x]}`;
 
   return (
     <div ref={box} className="px-2 pt-3 pb-1" style={{ height: h }} role="img" aria-label={label ?? desc} data-chart>
       <ResponsiveContainer width="100%" height="100%">
         {kk === "line" ? (
-          <LineChart data={shape.data} margin={{ top: 6, right: 16, bottom: 0, left: 4 }}>
+          <LineChart data={lineData} margin={{ top: 6, right: 16, bottom: 0, left: 4 }}>
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis dataKey="x" tickLine={false} axisLine={false} minTickGap={24} tick={tickStyle} />
-            <YAxis tickLine={false} axisLine={false} width={56} tick={tickStyle} tickFormatter={(v: number) => axisFormat(v, f)} />
+            <YAxis tickLine={false} axisLine={false} width={56} tick={tickStyle} tickFormatter={(v: number) => axisFormat(v, f, locale)} />
             {tooltip}
             {legend}
             {shape.series.map((s, i) => (
               <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={PALETTE[i % PALETTE.length]} strokeWidth={1.75} dot={shape.data.length <= 24 ? { r: 2.5, strokeWidth: 0, fill: PALETTE[i % PALETTE.length] } : false} activeDot={{ r: 4 }} animationDuration={600} />
             ))}
+            {openLine(0, false)}
           </LineChart>
         ) : kk === "area" ? (
-          <AreaChart data={shape.data} margin={{ top: 6, right: 16, bottom: 0, left: 4 }}>
+          <AreaChart data={lineData} margin={{ top: 6, right: 16, bottom: 0, left: 4 }}>
             <defs>
               {shape.series.map((s, i) => (
                 <linearGradient key={s.key} id={`fill-${i}`} x1="0" y1="0" x2="0" y2="1">
@@ -125,12 +110,13 @@ export function Viz({ r, formats, kind = "auto", height, compact = false, label,
             </defs>
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis dataKey="x" tickLine={false} axisLine={false} minTickGap={24} tick={tickStyle} />
-            <YAxis tickLine={false} axisLine={false} width={56} tick={tickStyle} tickFormatter={(v: number) => axisFormat(v, f)} />
+            <YAxis tickLine={false} axisLine={false} width={56} tick={tickStyle} tickFormatter={(v: number) => axisFormat(v, f, locale)} />
             {tooltip}
             {legend}
             {shape.series.map((s, i) => (
               <Area key={s.key} type="monotone" dataKey={s.key} name={s.label} stackId={stacked ? "s" : undefined} stroke={PALETTE[i % PALETTE.length]} strokeWidth={1.75} fill={`url(#fill-${i})`} animationDuration={600} />
             ))}
+            {openLine(0, true)}
           </AreaChart>
         ) : kk === "pie" ? (
           <PieChart>
@@ -143,21 +129,23 @@ export function Viz({ r, formats, kind = "auto", height, compact = false, label,
             </Pie>
           </PieChart>
         ) : kk === "hbar" ? (
-          <BarChart data={shape.data} layout="vertical" margin={{ top: 4, right: 20, bottom: 0, left: 4 }} barCategoryGap="24%">
+          <BarChart data={shape.data} layout="vertical" margin={{ top: 4, right: labels ? 44 : 20, bottom: 0, left: 4 }} barCategoryGap="24%">
             <CartesianGrid horizontal={false} stroke="var(--chart-grid)" />
-            <XAxis type="number" tickLine={false} axisLine={false} tick={tickStyle} tickFormatter={(v: number) => axisFormat(v, f)} />
+            <XAxis type="number" tickLine={false} axisLine={false} tick={tickStyle} tickFormatter={(v: number) => axisFormat(v, f, locale)} />
             <YAxis type="category" dataKey="x" tickLine={false} axisLine={false} width={yWidth} tick={{ fill: "var(--muted)", fontSize: 11.5 }} interval={0} />
             {tooltip}
             {legend}
             {shape.series.map((s, i) => (
-              <Bar key={s.key} dataKey={s.key} name={s.label} stackId={stacked ? "s" : undefined} fill={PALETTE[i % PALETTE.length]} radius={stacked ? 0 : [0, 3, 3, 0]} animationDuration={600} />
+              <Bar key={s.key} dataKey={s.key} name={s.label} stackId={stacked ? "s" : undefined} fill={PALETTE[i % PALETTE.length]} radius={stacked ? 0 : [0, 3, 3, 0]} animationDuration={600}>
+                {labels && <LabelList dataKey={s.key} position="right" offset={6} fill="var(--muted)" fontSize={11} formatter={(v: unknown) => axisFormat(Number(v), f, locale)} />}
+              </Bar>
             ))}
           </BarChart>
         ) : (
           <BarChart data={shape.data} margin={{ top: 6, right: 16, bottom: 0, left: 4 }} barCategoryGap="24%">
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
             <XAxis dataKey="x" tickLine={false} axisLine={false} tick={tickStyle} interval="preserveStartEnd" minTickGap={8} />
-            <YAxis tickLine={false} axisLine={false} width={56} tick={tickStyle} tickFormatter={(v: number) => axisFormat(v, f)} />
+            <YAxis tickLine={false} axisLine={false} width={56} tick={tickStyle} tickFormatter={(v: number) => axisFormat(v, f, locale)} />
             {tooltip}
             {legend}
             {shape.series.map((s, i) => (
@@ -168,41 +156,4 @@ export function Viz({ r, formats, kind = "auto", height, compact = false, label,
       </ResponsiveContainer>
     </div>
   );
-}
-
-/** Saves the chart inside `root` as a PNG, with theme colours resolved so it looks the same outside the app. */
-export async function chartPng(root: HTMLElement, name: string) {
-  const svg = root.querySelector("[data-chart] svg.recharts-surface") as SVGSVGElement | null;
-  if (!svg) return false;
-  const css = getComputedStyle(document.documentElement);
-  const clone = svg.cloneNode(true) as SVGSVGElement;
-  const w = svg.clientWidth || 800;
-  const h = svg.clientHeight || 320;
-  clone.setAttribute("width", String(w));
-  clone.setAttribute("height", String(h));
-  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  let text = new XMLSerializer().serializeToString(clone);
-  text = text.replace(/var\((--[\w-]+)\)/g, (_, v: string) => css.getPropertyValue(v).trim() || "#888");
-  const img = new Image();
-  const url = URL.createObjectURL(new Blob([text], { type: "image/svg+xml" }));
-  await new Promise((ok, fail) => {
-    img.onload = ok;
-    img.onerror = fail;
-    img.src = url;
-  });
-  const scale = 2;
-  const canvas = document.createElement("canvas");
-  canvas.width = w * scale;
-  canvas.height = h * scale;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = css.getPropertyValue("--surface").trim() || "#fff";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.scale(scale, scale);
-  ctx.drawImage(img, 0, 0, w, h);
-  URL.revokeObjectURL(url);
-  const a = document.createElement("a");
-  a.href = canvas.toDataURL("image/png");
-  a.download = name;
-  a.click();
-  return true;
 }

@@ -8,7 +8,9 @@ import { parse } from "@/lib/nl/parse";
 import { toSql } from "@/lib/nl/sql";
 import { columnFormats } from "@/lib/present";
 import { buildSeed } from "@/lib/seed";
+import { explain } from "@/lib/sql/explain";
 import { formatSql } from "@/lib/sql/format";
+import { snippets } from "@/lib/sql/snippets";
 
 const TODAY = "2026-11-05";
 
@@ -57,5 +59,14 @@ describe("tools around the answer", async () => {
     const s = suggestSql("SELECT i.st FROM invoices AS i", 11, model);
     expect(s.items.map((x) => x.text)).toEqual(["status"]);
     expect(suggestSql("SELECT * FROM inv", 17, model).items[0].text).toBe("invoices");
+  });
+  it("runs every example query, formatted, with rows and no errors flagged", () => {
+    for (const x of snippets(model, true)) {
+      const sql = formatSql(x.sql);
+      const r = db.run(sql);
+      expect(r.rows.length, x.title.en).toBeGreaterThan(0);
+      expect(r.rows).toEqual(db.run(x.sql).rows);
+      expect(explain(sql, model).flatMap((e) => e.lints.filter((l) => l.level === "error")), x.title.en).toEqual([]);
+    }
   });
 });

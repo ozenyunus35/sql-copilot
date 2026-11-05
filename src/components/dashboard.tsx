@@ -12,7 +12,7 @@ import type { Pin } from "@/lib/workspace";
 import { IconButton } from "./answer-card";
 import { ResultTable } from "./results";
 import { Button, EmptyState, cx } from "./ui";
-import { Viz } from "./viz";
+import { Viz } from "./viz-lazy";
 
 function money(v: number, money: boolean, locale: string) {
   return money ? v.toLocaleString(locale, { style: "currency", currency: "USD", notation: Math.abs(v) >= 1e6 ? "compact" : "standard", maximumFractionDigits: Math.abs(v) >= 1e6 ? 2 : 0 }) : v.toLocaleString(locale, { maximumFractionDigits: 1 });
@@ -41,8 +41,8 @@ export function Kpi({ ds, model, title, sql, question, onClick }: { ds: Dataset;
       <span className="truncate text-xs font-medium text-muted">{title}</span>
       <span className="mt-1.5 text-[22px] leading-7 font-semibold tracking-[-0.02em] tabular-nums">{data ? (data.f === "days" ? formatCell(data.v, "days", locale) : money(data.v, data.f === "money", locale)) : "—"}</span>
       {data?.prev ? (
-        <span className={cx("mt-1 inline-flex items-center gap-0.5 text-[11.5px] tabular-nums", data.prev.tone === "up" ? "text-success" : data.prev.tone === "down" ? "text-danger" : "text-faint")}>
-          {data.prev.tone === "up" ? <ArrowUpRight className="size-3" /> : data.prev.tone === "down" ? <ArrowDownRight className="size-3" /> : null}
+        <span className={cx("mt-1 flex items-start gap-0.5 text-[11.5px] leading-4 tabular-nums", data.prev.tone === "up" ? "text-success" : data.prev.tone === "down" ? "text-danger" : "text-faint")}>
+          {data.prev.tone === "up" ? <ArrowUpRight className="mt-0.5 size-3 shrink-0" /> : data.prev.tone === "down" ? <ArrowDownRight className="mt-0.5 size-3 shrink-0" /> : null}
           {data.prev[lang].split(" (")[0]}
         </span>
       ) : (

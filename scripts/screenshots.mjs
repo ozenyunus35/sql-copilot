@@ -51,7 +51,7 @@ await shot("sql-dark", {
     await nav(page, /^SQL$/);
     const ed = page.getByRole("textbox", { name: "SQL" });
     await ed.fill("SELECT c.name, SUM(i.total) AS revenue\nFROM customers c\nJOIN invoices i ON i.customer_id = c.id\nJOIN invoice_lines il ON il.invoice_id = i.id\nWHERE c.country = NULL\nGROUP BY c.name;");
-    await page.getByRole("button", { name: /^Run/ }).click();
+    await page.getByRole("button", { name: /^Run\b/ }).click();
     await page.getByRole("tab", { name: /Explanation/ }).click();
   },
 });

@@ -97,16 +97,26 @@ test("the SQL editor completes names, formats, explains and flags mistakes", asy
   await expect(editor).toHaveValue("SELECT * FROM invoices AS i WHERE i.status");
 });
 
+test("runs a worked example query from the SQL page", async ({ page }) => {
+  await open(page);
+  await go(page, /^SQL$/);
+  await page.getByRole("button", { name: /^Running total this year/ }).click();
+  await expect(page.getByRole("tab", { name: "Running total this year" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("table")).toContainText("running_total");
+  await page.getByRole("tab", { name: /Explanation/ }).click();
+  await expect(page.getByText(/with a running total \(running_total\)/)).toBeVisible();
+});
+
 test("asks before running SQL that changes data", async ({ page }) => {
   await open(page);
   await go(page, /^SQL$/);
   await page.getByRole("textbox", { name: "SQL" }).fill("DELETE FROM invoices");
-  await page.getByRole("button", { name: /^Run/ }).click();
+  await page.getByRole("button", { name: /^Run\b/ }).click();
   const dialog = page.getByRole("dialog", { name: "This changes data" });
   await expect(dialog).toContainText("This DELETE has no WHERE");
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("textbox", { name: "SQL" }).fill("SELECT custmer_id FROM invoices");
-  await page.getByRole("button", { name: /^Run/ }).click();
+  await page.getByRole("button", { name: /^Run\b/ }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Did you mean" })).toContainText("Did you mean “customer_id” (in invoices)?");
 });
 
