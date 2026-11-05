@@ -100,8 +100,8 @@ export function answerSentence(r: QueryResult, formats: ColumnFormat[], plan: Pl
     if (r.rows.length === 1) return tr ? `${top[first]}: ${label(y)} ${short(top[y] as number, formats[y], locale)}.` : `${top[first]}, with ${label(y)} of ${short(top[y] as number, formats[y], locale)}.`;
     if (plan?.order?.by === "measure")
       return tr
-        ? `${sortedDesc ? "En yüksek" : "En düşük"} ${label(y)}: ${top[first]} (${short(top[y] as number, formats[y], locale)}). ${r.rows.length} satır.`
-        : `${top[first]} has the ${sortedDesc ? "highest" : "lowest"} ${label(y)}: ${short(top[y] as number, formats[y], locale)}. ${r.rows.length} rows.`;
+        ? `${sortedDesc ? "En yüksek" : "En düşük"} ${label(y)}: ${top[first]} (${short(top[y] as number, formats[y], locale)}).`
+        : `${top[first]} has the ${sortedDesc ? "highest" : "lowest"} ${label(y)}: ${short(top[y] as number, formats[y], locale)}.`;
     const total = r.rows.reduce((a, row) => a + (Number(row[y]) || 0), 0);
     if (formats[y] === "money" || formats[y] === "integer")
       return tr ? `${r.rows.length} grup, toplam ${label(y)} ${short(total, formats[y], locale)}.` : `${r.rows.length} groups, ${label(y)} adding up to ${short(total, formats[y], locale)}.`;

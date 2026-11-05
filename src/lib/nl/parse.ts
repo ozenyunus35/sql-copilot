@@ -129,6 +129,8 @@ const TR_CMP_AFTER = /^(fazla|uzeri|uzerinde|ustu|ustunde|buyuk|yuksek|az|alti|a
 const CURRENCY = /^(dollar|dollars|usd|bucks|eur|euro|euros|dolar|dolarlik|lira|tl|try|bin|milyon|thousand|million|k)$/;
 
 export interface ParseOptions {
+  /** The previous question and its plan, for follow-ups like "now by month" or "peki Almanya?". */
+  base?: { plan: Plan; question: string };
   /** Pick a different reading for a phrase: { "sales": "metric:units" }. */
   prefer?: Record<string, string>;
 }
@@ -290,7 +292,8 @@ export function parse(question: string, model: Model, opts: ParseOptions = {}): 
       pick = listy && (isOwn || cmpNear || spans.some((o) => has(o, "count"))) ? tables[0] : metrics[0];
     } else if (metrics.length === 1 && columns.length) {
       // "cost": a product's unit cost when products are in the question, else expenses.
-      const c = columns.find((x) => tablesMentioned.has(x.table));
+      const mt = model.metrics.find((m) => m.id === metrics[0].metric)!.table;
+      const c = columns.find((x) => tablesMentioned.has(x.table) && x.table !== mt);
       pick = c ?? metrics[0];
     } else if (columns.length > 1 || (columns.length && tables.length)) {
       const c = columns.find((x) => tablesMentioned.has(x.table)) ?? (tables.length && !columns.some((x) => tablesMentioned.has(x.table)) ? tables[0] : columns[0]);
@@ -348,7 +351,14 @@ export function parse(question: string, model: Model, opts: ParseOptions = {}): 
   const ignored = ts
     .filter((t, i) => t.kind === "word" && !skip.has(i) && !spanAt(i) && t.t.length > 1 && numberWord(t.t) === null && !/^\d/.test(t.t))
     .map((t) => t.raw);
-  if (!anyData) {
+  // Follow-ups: a question with no measure or table of its own builds on the previous answer.
+  const fq = fold(question).trim();
+  const cue = /^(what about|how about|and |now |only |just |same |instead|but |also |then |what if|peki|ya |simdi|sadece|yalnizca|bir de|ayni|bunun yerine|onu |bunu |bunlari)/.test(fq) || /\b(instead|as well)\b/.test(fq);
+  const prev = opts.base;
+  const shapeOnly = !tableSpans.length && !metricSpans.length && !spans.some((x) => has(x, "count"));
+  const followUp = !!prev && (cue || shapeOnly) && (prev.plan.kind !== "anti" || shapeOnly);
+  const followUpHasContent = followUp && (ranges.length > 0 || spans.some((x) => ["grain", "group", "top", "bottom", "trend", "share", "growth", "value", "column", "cmp", "agg"].includes(x.senses[0].k)) || nums.length > 0);
+  if (!anyData && !followUpHasContent) {
     return fail(
       "I couldn't connect this to the data. Ask about customers, invoices, payments, products or expenses, for example “revenue by month this year”.",
       "Bunu verideki bir şeyle eşleştiremedim. Müşteriler, faturalar, ödemeler, ürünler ya da giderler hakkında sorun; örneğin “bu yıl aylık ciro”.",
@@ -566,6 +576,8 @@ export function parse(question: string, model: Model, opts: ParseOptions = {}): 
     if (tm?.rankMetric && !namedNumeric && !latest && !earliest) measures.push({ kind: "metric", metric: tm.rankMetric });
   }
 
+  if (followUp && prev && !measures.length && prev.plan.kind === "aggregate" && !(aggSpans.length && columnSpans.length)) measures.push(...structuredClone(prev.plan.measures));
+
   // ---- What the rows are about ----
   const headTable = (() => {
     const cands = tableSpans.filter((s) => !(countTable && sense<"table">(s).table === countTable && measures[0]?.kind === "count" && tableSpans.length > 1));
@@ -598,7 +610,7 @@ export function parse(question: string, model: Model, opts: ParseOptions = {}): 
   }
 
   let kind: Plan["kind"] = measures.length ? "aggregate" : "list";
-  const subject = measures.length ? measureTable(measures[0]) : headTable ? sense<"table">(headTable).table : valueSpans.length ? sense<"value">(valueSpans[0]).table : columnSpans.length ? sense<"column">(columnSpans[0]).table : quoted.length ? model.tables[0].name : metricSpans.length ? metricOf(sense<"metric">(metricSpans[0]).metric).table : model.tables[0].name;
+  const subject = measures.length ? measureTable(measures[0]) : followUp && prev && !headTable ? prev.plan.subject : headTable ? sense<"table">(headTable).table : valueSpans.length ? sense<"value">(valueSpans[0]).table : columnSpans.length ? sense<"column">(columnSpans[0]).table : quoted.length ? model.tables[0].name : metricSpans.length ? metricOf(sense<"metric">(metricSpans[0]).metric).table : model.tables[0].name;
 
   // A list question that names a numeric column with a superlative: "top 5 invoices by total", "most expensive products".
   if (kind === "list" && aggSpans.length) {
@@ -865,6 +877,48 @@ export function parse(question: string, model: Model, opts: ParseOptions = {}): 
       if (amountTable?.amountColumn) plan.filters.push({ kind: "compare", table: amountTable.name, column: amountTable.amountColumn, op: c.op, value: c.value, value2: c.value2 });
     }
 
+    // Follow-up: keep what the new words don't change.
+    if (followUp && prev) {
+      const b = prev.plan;
+      const additive = /\b(also|as well|too|and also)\b|\b(de|da)\b|bir de/.test(fq);
+      const total = /\b(in total|overall|altogether|toplamda|genel toplam)\b/.test(fq);
+      const clearAll = /(without filters|no filters|remove (the )?filters|filtresiz|filtreleri kaldir|tum filtreleri)/.test(fq);
+      const cleared = new Set<string>();
+      // "all countries", "tüm ülkeler": drop that filter.
+      spans.forEach((sp, k) => {
+        if (/^(all|every|tum|butun|her)$/.test(fold(sp.text))) {
+          const next = spans[k + 1];
+          if (next && C(next).k === "column") cleared.add(`${sense<"column">(next).table}.${sense<"column">(next).column}`);
+        }
+      });
+      if (!clearAll) {
+        for (const f of b.filters) {
+          if (f.kind === "date") {
+            if (!plan.filters.some((x) => x.kind === "date")) plan.filters.push(structuredClone(f));
+            continue;
+          }
+          if (cleared.has(`${f.table}.${f.column}`)) continue;
+          const same = plan.filters.find((x) => x.kind !== "date" && x.table === f.table && x.column === f.column);
+          if (same) {
+            if (additive && same.kind === "value" && f.kind === "value" && same.negate === f.negate) same.values = [...new Set([...f.values, ...same.values])];
+            continue;
+          }
+          plan.filters.push(structuredClone(f));
+        }
+      }
+      if (!plan.groups.length && !total && b.kind === "aggregate" && plan.kind === "aggregate") {
+        plan.groups = structuredClone(b.groups);
+        if (!topSpan && !limit) {
+          plan.order = b.order && structuredClone(b.order);
+          plan.limit = b.limit;
+        }
+        plan.share = plan.share || b.share;
+        plan.growth = plan.growth || b.growth;
+      }
+      if (!plan.having && b.having && plan.groups.length) plan.having = structuredClone(b.having);
+      notes.unshift({ kind: "shape", en: `Follow-up to “${prev.question}”`, tr: `“${prev.question}” sorusunun devamı` });
+    }
+
     // "how many customers spent over 10k": count the groups.
     if (countSpan && plan.having && plan.groups.some((g) => g.kind === "entity")) {
       plan.countGroups = true;
@@ -922,6 +976,11 @@ export function parse(question: string, model: Model, opts: ParseOptions = {}): 
       if (limit) plan.limit = limit;
     }
 
+    // A follow-up that didn't ask for a new ranking keeps the previous one ("top 5 ... / what about last year").
+    if (followUp && prev && !topSpan && !limit && prev.plan.limit && JSON.stringify(plan.groups) === JSON.stringify(prev.plan.groups)) {
+      plan.order = structuredClone(prev.plan.order);
+      plan.limit = prev.plan.limit;
+    }
     // Notes, in both languages.
     describe(model, plan, ranges);
     if (ignored.length) notes.push({ kind: "ignored", en: `Not used: ${ignored.join(", ")}`, tr: `Kullanılmayan: ${ignored.join(", ")}` });

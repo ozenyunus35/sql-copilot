@@ -19,7 +19,7 @@ export function ThemeToggle() {
     } catch {}
   };
   return (
-    <button onClick={toggle} className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-text" aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}>
+    <button onClick={toggle} data-theme-toggle className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-text" aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}>
       {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
     </button>
   );

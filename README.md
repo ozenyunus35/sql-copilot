@@ -4,45 +4,72 @@
 
 **[Live demo](https://ozenyunus35.github.io/sql-copilot/)** · Demo data is synthetic: Brightwater Supply Co., a fictional wholesaler, with three years of customers, invoices, payments, products and expenses.
 
-![Quarry answering "Monthly revenue this year" with a chart, the SQL and how the question was read](docs/cover.png)
+![Quarry's welcome screen with live numbers and starter questions](docs/cover.png)
 
 ## What it does
 
-- **Questions to SQL, in two languages.** For example "top 5 customers by revenue last quarter" or "son 3 ayda hiç faturası olmayan müşteriler". It reads:
-  - Turkish suffixes (müşterilerin, Almanya'daki, 2024'ten beri);
-  - typos (revnue, quater);
+**Ask**
+- **Questions to SQL, in two languages.** Ask "top 5 customers by revenue last quarter" or "son 3 ayda hiç faturası olmayan müşteriler". It reads:
+  - Turkish suffixes, such as müşterilerin, Almanya'daki and 2024'ten beri;
+  - typos, such as revnue and quater;
   - numbers written as 10k, 5.000 or 5 bin;
-  - dates such as "last 6 months", "geçen çeyrek", "Q3 2025", "the third quarter of 2025" and "between March and June".
-- **Shows how it read the question.** Each piece of the reading appears as a chip: the measure and its exact definition, groups, filters, the date range with real dates, and top N. Words it ignored are listed. When a phrase has another reading, the other reading is offered with one click.
-- **Business measures, not just columns.** Revenue leaves out void invoices. Outstanding is invoice totals minus what has been paid. The engine also knows days to pay, gross profit, margin and units sold. Grouping by product switches revenue to the invoice-line level, so totals are never double counted.
-- **Answers in a sentence, a chart and a table.**
-  - The sentence reads like "Willow Labs has the highest revenue: $370,959" or "Latest: 2026-11 so far".
-  - Time series become lines and categories become bars.
-  - Tables sort by column; results export to CSV or Excel.
-- **Explains any SQL.** It explains generated SQL and SQL you type, step by step, in English or Turkish, and flags mistakes:
+  - dates such as last 6 months, geçen çeyrek, the third quarter of 2025 and between March and June.
+- **Follow-up questions.** After an answer you can say "what about last year?", "only Germany", "now by month", "units instead" or "peki Fransa?". Quarry keeps everything the new words don't change, such as a top 5 or a date range, and marks the card as a follow-up.
+- **Answer cards.** Each card shows:
+  - a one-sentence answer, like "Willow Labs has the highest revenue: $637,691";
+  - computed observations: the share of the total, the gap to the next one, the change from the period before and the trend over the series;
+  - a chart you can switch between bars, rows, line, area and donut, plus the table, the SQL and an explanation;
+  - one-click follow-up suggestions.
+- **How the question was read.** The measure appears with its exact definition, together with the groups, the filters, the date range with real dates and top N. Ignored words are listed, and when a word has another meaning, that reading is one click away.
+- **Autocomplete.** The question box suggests measures, tables, columns, values and dates in both languages as you type.
+
+**SQL**
+- **An editor.**
+  - Query tabs, syntax highlighting and completion that knows aliases (`i.` lists the invoice columns).
+  - A formatter, saved queries and history.
+  - The query plan (EXPLAIN QUERY PLAN), with full table scans marked.
+- **Explanations and checks for any SQL, in English or Turkish.** It flags:
   - `= NULL` and WHERE on an aggregate;
   - columns that are neither grouped nor aggregated;
   - SUMs inflated by a join to a child table;
   - AND/OR without parentheses, dates not in ISO form, NOT IN with NULLs;
-  - cartesian joins, integer division, DELETE or UPDATE without WHERE.
+  - cartesian joins, integer division, and DELETE or UPDATE without WHERE (these ask before running).
 
   A misspelled column gets "Did you mean customer_id (in invoices)?".
+
+**Dashboard**
+- **A finance overview to start with:**
+  - revenue this year compared with the same dates last year;
+  - outstanding and overdue balances, and average days to pay;
+  - monthly revenue, revenue by segment, top customers, expenses and margin.
+- Pin any answer to the dashboard. Pinned cards are computed from the current data and can be reordered and resized.
+
+**Data**
+- **A data dictionary.** For every table and column it shows the meaning, its role (key, link, money, date, category…), the words for it in both languages and the values it holds. Every business measure is listed with its exact SQL. A relations map shows how the tables connect.
+- **Teach it your words.** For example, tell it that "enterprise" means the Corporate segment and that "top line" means revenue. Taught words are kept per dataset, in this browser.
 - **Your own data.**
-  - Supported files: CSV, TSV, Excel (.xlsx, every sheet), JSON and SQLite.
-  - Several CSVs become related tables; `orders.customer_id` links to `customers` when the values line up.
-  - Types and roles are inferred: money, quantity, dates (day-first or month-first, decided from the values), categories and names.
-  - Turkish and European number formats, Windows-1254 files, title rows above the header and (accounting) negatives are handled.
-  - PDFs, images, Word files, old .xls files and other unsupported files are rejected with a clear reason.
-  - Uploads stay in IndexedDB, in this browser.
-- **Around it:** a schema browser with column profiles, a schema map, history, saved queries, share links, light and dark themes, an English and Turkish interface, and a phone layout.
+  - Formats: CSV, TSV, Excel (every sheet), JSON and SQLite.
+  - Several CSVs become related tables.
+  - Types and roles are inferred, and dates are read day-first or month-first depending on the values.
+  - Turkish and European numbers, Windows-1254 files, title rows above the header and (accounting) negatives are handled.
+  - PDFs, images, Word files and old .xls files are rejected with a clear reason.
 
-| Ranking, dark theme | Turkish question | Checks on hand-written SQL |
-| --- | --- | --- |
-| ![Top 10 customers by revenue](docs/ranking-dark.png) | ![Customers with no invoices in the last 3 months, in Turkish](docs/turkish.png) | ![Explanation with = NULL and double-counting warnings](docs/explain.png) |
+**Everywhere:**
+- A ⌘K command palette and keyboard shortcuts.
+- An English and Turkish interface.
+- Light and dark themes and a phone layout.
+- Share links and CSV, Excel and PNG exports.
+- Nothing leaves the browser.
 
-| Schema map | Phone |
+| Follow-up question | Dashboard |
 | --- | --- |
-| ![Schema map](docs/map.png) | ![Phone layout](docs/mobile.png) |
+| ![A follow-up question in the Ask thread](docs/thread-dark.png) | ![Finance dashboard](docs/dashboard.png) |
+
+| SQL editor with checks | Data dictionary | Turkish |
+| --- | --- | --- |
+| ![SQL editor flagging = NULL and double counting](docs/sql-dark.png) | ![Measures with their SQL](docs/data.png) | ![A Turkish question](docs/turkish.png) |
+
+![Phone layout](docs/mobile.png)
 
 ## How accurate it is
 
@@ -83,7 +110,7 @@ How the numbers were made:
    - A group below the measure's grain switches to a finer measure, so nothing double counts.
    - The SQL is formatted for people to read.
 
-Code: `src/lib/nl` (parser), `src/lib/sql` (explainer and checks), `src/lib/import` (uploads), `src/lib/model.ts` (semantic model).
+Code: `src/lib/nl` (parser), `src/lib/sql` (explainer, checks, formatter), `src/lib/import` (uploads), `src/lib/model.ts` (semantic model), `src/lib/insights.ts` (observations), `src/lib/complete.ts` (autocomplete).
 
 ## Run it
 
