@@ -78,7 +78,9 @@ export function answerSentence(r: QueryResult, formats: ColumnFormat[], plan: Pl
     return `${l.charAt(0).toLocaleUpperCase(locale) + l.slice(1)}: ${short(r.rows[0][0] as number, formats[0], locale)}${plan?.filters.some((f) => f.kind === "date") ? ` (${plan.filters.filter((f) => f.kind === "date").map((f) => (f as { label: string }).label).join(", ")})` : ""}.`;
   }
   const first = formats.findIndex((f) => f === "text" || f === "period" || f === "date");
-  const y = numIdx.find((j) => !["share_pct", "change_pct"].includes(r.columns[j]));
+  const nums = numIdx.filter((j) => !["share_pct", "change_pct"].includes(r.columns[j]));
+  // Hand-written SQL: the money column says more than a count next to it.
+  const y = (plan ? undefined : nums.find((j) => formats[j] === "money")) ?? nums[0];
   if (first >= 0 && y !== undefined) {
     const isTime = formats[first] === "period" || (formats[first] === "date" && plan?.groups.some((g) => g.kind === "time"));
     if (isTime && r.rows.length > 2) {

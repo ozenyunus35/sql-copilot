@@ -141,8 +141,7 @@ export function SqlView({ ds, model, tabs, setTabs, active, setActive, saved, on
               {snippets(model, ds.kind === "demo").map((x) => (
                 <li key={x.sql}>
                   <button onClick={() => {
-                      const sql = formatSql(x.sql);
-                      execute(sql, addTab(sql, x.title[lang]));
+                      execute(x.sql, addTab(x.sql, x.title[lang]));
                     }} className="group flex h-full w-full flex-col rounded-lg border border-border bg-surface p-3 text-left shadow-card transition-colors hover:border-border-strong">
                     <span className="flex items-center justify-between gap-2 text-[13px] font-medium">
                       {x.title[lang]}
