@@ -258,7 +258,7 @@ export function AskView({ ds, model, thread, pins, onAsk, onRemove, onPin, onOpe
           </>
         )}
       </div>
-      <div className="sticky bottom-0 z-20 bg-gradient-to-t from-bg via-bg/95 to-bg/0 pt-6 pb-3 sm:pb-5">
+      <div className="sticky bottom-0 z-20 bg-[linear-gradient(to_top,var(--bg)_calc(100%-1.5rem),transparent)] pt-6 pb-3 sm:pb-5">
         <div className="mx-auto w-full max-w-4xl px-3 sm:px-6">
           <AskBar
             model={model}
